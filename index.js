@@ -159,7 +159,7 @@ const TOOLS = [
   },
   {
     name: "zendesk_update_article_draft",
-    description: "Update a Help Center article's title and/or body, and set it to draft status for review. Use this when publishing an audited version of an article that needs human review before going live.",
+    description: "Update a Help Center article's title and/or body and set it to draft status. Note: the Zendesk REST API does not support setting review state — the 'Awaiting Review' status must be set manually in Zendesk Guide Admin after the draft is created.",
     inputSchema: {
       type: "object",
       properties: {
@@ -301,8 +301,9 @@ async function callTool(name, args) {
     }
 
     case "zendesk_update_article_draft": {
-      // Step 1: update translation (title + body)
-      const translationPayload = { translation: { body: args.body } };
+      // Step 1: update translation (title, body, draft status)
+      // draft is a property of the translation, not the article — must be set here
+      const translationPayload = { translation: { body: args.body, draft: true } };
       if (args.title) translationPayload.translation.title = args.title;
       await zendeskWrite(
         "PUT",
@@ -310,18 +311,22 @@ async function callTool(name, args) {
         translationPayload
       );
 
-      // Step 2: set draft: true and optionally update labels
-      const articlePayload = { article: { draft: true } };
-      if (args.label_names) articlePayload.article.label_names = args.label_names;
-      await zendeskWrite(
-        "PUT",
-        `/api/v2/help_center/articles/${args.article_id}.json`,
-        articlePayload
-      );
+      // Step 2: update article-level metadata (label_names only if provided)
+      // Note: review_state is NOT a supported Zendesk API field — "Awaiting Review"
+      // must be set manually in Zendesk Guide Admin after the draft is created.
+      if (args.label_names) {
+        const articlePayload = { article: { label_names: args.label_names } };
+        await zendeskWrite(
+          "PUT",
+          `/api/v2/help_center/articles/${args.article_id}.json`,
+          articlePayload
+        );
+      }
 
       return {
         article_id: args.article_id,
         status: "draft",
+        note: "Review state cannot be set via API — set 'Awaiting Review' manually in Zendesk Guide Admin",
         title_updated: !!args.title,
         labels_updated: !!args.label_names,
         zendesk_url: `https://${SUBDOMAIN}.zendesk.com/hc/en-us/articles/${args.article_id}`,
