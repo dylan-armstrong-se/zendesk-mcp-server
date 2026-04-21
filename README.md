@@ -13,6 +13,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for Zen
 | `zendesk_search_articles` | Search Help Center articles by keyword |
 | `zendesk_get_ticket` | Fetch a support ticket and its comments by ID |
 | `zendesk_search_tickets` | Search tickets using Zendesk search syntax |
+| `zendesk_update_article_draft` | Update an article's title/body and set it to draft for review |
 
 ## Requirements
 
@@ -23,7 +24,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for Zen
 ## Installation
 
 ```bash
-git clone https://github.com/dylanarmstrong/zendesk-mcp-server.git
+git clone https://github.com/dylan-armstrong-se/zendesk-mcp-server.git
 cd zendesk-mcp-server
 npm install
 ```
@@ -74,3 +75,4 @@ Once registered, use these tools naturally in Claude Code:
 - *"Search the Zendesk KB for articles about OCPP configuration"*
 - *"Get Zendesk ticket 12345 with all comments"*
 - *"Search tickets with status:open priority:high"*
+- *"Update article 12345 with the revised content and set it to draft"*

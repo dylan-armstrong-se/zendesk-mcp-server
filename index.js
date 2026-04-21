@@ -47,6 +47,38 @@ function zendeskFetch(path) {
   });
 }
 
+function zendeskWrite(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify(body);
+    const options = {
+      hostname: `${SUBDOMAIN}.zendesk.com`,
+      path,
+      method,
+      headers: {
+        Authorization: `Basic ${AUTH}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(bodyStr),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        if (res.statusCode >= 400) {
+          reject(new Error(`Zendesk API error ${res.statusCode}: ${data}`));
+        } else {
+          resolve(res.statusCode === 204 ? {} : JSON.parse(data));
+        }
+      });
+    });
+
+    req.on("error", reject);
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 const TOOLS = [
   {
     name: "zendesk_list_categories",
@@ -123,6 +155,24 @@ const TOOLS = [
         limit: { type: "number", description: "Max results to return (default 20, max 100)" },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "zendesk_update_article_draft",
+    description: "Update a Help Center article's title and/or body, and set it to draft status for review. Use this when publishing an audited version of an article that needs human review before going live.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        article_id: { type: "string", description: "The article ID to update" },
+        title: { type: "string", description: "New article title (optional — omit to keep existing title)" },
+        body: { type: "string", description: "New article body as HTML" },
+        label_names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Replacement label/tag list for the article (optional — omit to keep existing labels)",
+        },
+      },
+      required: ["article_id", "body"],
     },
   },
 ];
@@ -248,6 +298,34 @@ async function callTool(name, args) {
         updated_at: t.updated_at,
         tags: t.tags,
       }));
+    }
+
+    case "zendesk_update_article_draft": {
+      // Step 1: update translation (title + body)
+      const translationPayload = { translation: { body: args.body } };
+      if (args.title) translationPayload.translation.title = args.title;
+      await zendeskWrite(
+        "PUT",
+        `/api/v2/help_center/articles/${args.article_id}/translations/en-us.json`,
+        translationPayload
+      );
+
+      // Step 2: set draft: true and optionally update labels
+      const articlePayload = { article: { draft: true } };
+      if (args.label_names) articlePayload.article.label_names = args.label_names;
+      await zendeskWrite(
+        "PUT",
+        `/api/v2/help_center/articles/${args.article_id}.json`,
+        articlePayload
+      );
+
+      return {
+        article_id: args.article_id,
+        status: "draft",
+        title_updated: !!args.title,
+        labels_updated: !!args.label_names,
+        zendesk_url: `https://${SUBDOMAIN}.zendesk.com/hc/en-us/articles/${args.article_id}`,
+      };
     }
 
     default:
